@@ -1,0 +1,30 @@
+[gd_resource type="ShaderMaterial" load_steps=5 format=2]
+
+[ext_resource path="res://Scenes/StylizedWaterfall/Textures/StylizedSandTexture.png" type="Texture" id=1]
+
+[sub_resource type="Shader" id=18]
+code = "shader_type spatial;
+
+uniform sampler2D tex;
+uniform sampler2D deform;
+
+void vertex() {
+	float d = texture(deform,UV - TIME * 0.04).r;
+	VERTEX.y = d;
+}
+
+void fragment() {
+	vec4 sandtex = texture(tex, UV);
+	ALBEDO = sandtex.rgb;
+}"
+
+[sub_resource type="OpenSimplexNoise" id=19]
+
+[sub_resource type="NoiseTexture" id=20]
+seamless = true
+noise = SubResource( 19 )
+
+[resource]
+shader = SubResource( 18 )
+shader_param/tex = ExtResource( 1 )
+shader_param/deform = SubResource( 20 )

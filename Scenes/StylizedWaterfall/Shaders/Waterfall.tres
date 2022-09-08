@@ -1,0 +1,127 @@
+[gd_resource type="ShaderMaterial" load_steps=8 format=2]
+
+[sub_resource type="Shader" id=8]
+code = "shader_type spatial;
+render_mode cull_disabled;
+uniform vec4 water_color:hint_color;
+uniform float color_intesity:hint_range(0.01,10,0.01) = 1.0;
+uniform float color_saturation:hint_range(0.01,1,0.01) = 0.0;
+uniform float stylize_amount:hint_range(0,5,0.01) = 1.0;
+uniform float stretch_y = 4;
+uniform float water_speed:hint_range(0.01,10,0.01) = 3.0;
+
+uniform vec4 foam_color:hint_color;
+uniform float foam_range:hint_range(0.9,0.99,0.01) = 0.9;
+uniform float foam_amount = 0.02;
+
+uniform float foam_edge_scale = 0.6;
+uniform float foam_near = 0.2;
+uniform float foam_far = 500;
+
+uniform sampler2D water_layer1;
+uniform sampler2D water_layer2;
+uniform sampler2D foam_map;
+
+float animate_waterfall(vec2 uv)
+{
+	float water_tex1 = texture(water_layer1, vec2(uv.x,uv.y/stretch_y - TIME * 0.08 * water_speed)).r;
+	float water_tex2 = texture(water_layer2, vec2(uv.x,uv.y/stretch_y - TIME * 0.05 * water_speed)).r;
+	return (water_tex1 + water_tex2) - 1.0;
+}
+float stylize_water(float val)
+{
+	val = val * stylize_amount;
+	if(val < -0.0 && val >= -0.2) return -0.01;
+	if(val < -0.2 && val >= -0.35) return -0.07;
+	if(val < -0.35 && val >= -1.0) return -0.12;
+	if(val > 0.0 && val <= 0.15) return 0.2;
+	if(val > 0.15 && val <= 0.35) return 0.3;
+	if(val > 0.35 && val <= 0.5) return 0.5;
+	if(val > 0.5 && val <= 1.0) return 0.8;
+	return 1.0;
+}
+
+vec2 add_water_foam_line(vec2 uv) {
+	vec2 displ = texture(water_layer2, uv - TIME / 8.0).rg;
+	return ((displ * 2.0) -1.0) * foam_amount;	
+}
+
+float linearize(float depth, float z_near, float z_far) {
+	// Convert the exponential depth to a linear value	
+	depth = 2f * depth - 1f;
+	return z_near * z_far / (z_far + depth * (z_near - z_far));
+}
+float foam_edge(sampler2D depth_texture, float time, vec2 screen_uv, float fragcoord_z){
+	float z_depth = linearize(texture(depth_texture, screen_uv).x, foam_near, foam_far);
+	float z_pos = linearize(fragcoord_z, foam_near, foam_far);
+	return z_depth - z_pos;
+}
+float animate_foam(vec2 uv, float time) {
+	vec2 displ = texture(foam_map, vec2(uv.x,uv.y - TIME * 0.04 * water_speed)).gb;
+	// convert the displacement to value range -1 and 1
+	displ = ((displ * 2.0) -1.0) *0.5;
+	return displ.x *1.5;
+}
+
+void fragment() {
+	float animated_water = animate_waterfall(UV);
+	float stylized = stylize_water(animated_water);
+	vec2 foam_line = add_water_foam_line(UV);
+	vec4 color = vec4(stylized,stylized,stylized,1.0);
+	
+		// Foam / Shoreline
+	float foam = foam_edge(DEPTH_TEXTURE, TIME, SCREEN_UV, FRAGCOORD.z);
+	float foam_anim = animate_foam(UV, TIME);
+	foam += foam_anim;
+	color = mix(foam_color * 5.0, color, step(foam_edge_scale, foam));	
+	
+	color = mix(foam_color * 4.0, color, step(UV.y - foam_line.y, foam_range));
+	if(UV.x <= 0.01 || UV.x > 0.99) {
+		color += vec4(1,1,1,1) * 0.5;
+	}
+	
+	vec4 screen_tex = texture(SCREEN_TEXTURE,SCREEN_UV);
+	ALBEDO = color.rgb + mix(screen_tex.rgb, water_color.rgb * color_intesity, water_color.a);
+	ALBEDO -= vec3(color_saturation,color_saturation,color_saturation);
+}"
+
+[sub_resource type="OpenSimplexNoise" id=15]
+period = 131.5
+persistence = 0.797
+lacunarity = 1.92
+
+[sub_resource type="NoiseTexture" id=16]
+width = 1024
+seamless = true
+noise = SubResource( 15 )
+
+[sub_resource type="OpenSimplexNoise" id=9]
+
+[sub_resource type="NoiseTexture" id=10]
+width = 256
+seamless = true
+noise = SubResource( 9 )
+
+[sub_resource type="OpenSimplexNoise" id=11]
+
+[sub_resource type="NoiseTexture" id=12]
+seamless = true
+noise = SubResource( 11 )
+
+[resource]
+shader = SubResource( 8 )
+shader_param/water_color = Color( 0.0588235, 0.101961, 0.901961, 0.0705882 )
+shader_param/color_intesity = 5.9
+shader_param/color_saturation = 0.0
+shader_param/stylize_amount = 1.0
+shader_param/stretch_y = 4.0
+shader_param/water_speed = 4.0
+shader_param/foam_color = Color( 1, 1, 1, 1 )
+shader_param/foam_range = 0.96
+shader_param/foam_amount = 0.07
+shader_param/foam_edge_scale = 0.35
+shader_param/foam_near = 0.25
+shader_param/foam_far = 500.0
+shader_param/water_layer1 = SubResource( 10 )
+shader_param/water_layer2 = SubResource( 12 )
+shader_param/foam_map = SubResource( 16 )
